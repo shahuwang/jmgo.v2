@@ -30,6 +30,7 @@ public class MainTest extends TestCase{
         byte[] buf2 = ByteBuffer.allocate(4).putInt(b).array();
         System.out.println(Arrays.toString(buf2));
         System.out.println(-6 & 0xff);
+        System.out.println((int)buf[0]);
 
     }
 
@@ -48,6 +49,12 @@ public class MainTest extends TestCase{
         try {
             mso.Query(op);
         }catch (WriteIOException e){
+            System.out.println(e.getMessage());
+        }
+        try{
+            Thread.sleep(10000);
+            conn.close();
+        }catch (IOException | InterruptedException e){
             System.out.println(e.getMessage());
         }
     }

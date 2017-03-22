@@ -38,6 +38,7 @@ public class MongoSocket {
         this.conn = conn;
         this.server = server;
         this.getNonce = this.lock.newCondition();
+        new Thread(() -> readLoop()).start();
     }
 
     public void Query(IOperator ...ops)throws WriteIOException{
@@ -107,6 +108,105 @@ public class MongoSocket {
 
     }
 
+    private void readLoop(){
+        byte[] p = new byte[36]; // 固定的header占16 byte，固定的其他字段占20 byte
+        byte[] s = new byte[4]; // 用于读取bson的头部，指明了该bson数据长度是多少
+        Socket conn = this.conn;
+        while (true){
+            try {
+                fill(conn, p);
+            }catch (IOException e){
+                kill(new JmgoException(e.getMessage()), true);
+                return;
+            }
+            //要注意，数据是小端存储的
+            int totalLen = getInt(p, 0);
+            int responseTo = getInt(p, 8);
+            int opCode = getInt(p, 12); // 目前的opcode只需要2 byte
+            if(opCode != 1){
+                kill(new JmgoException("opcode != 1, corrupted data?"), true);
+                return;
+            }
+            int flags = getInt(p, 16) & 0xff; // 转换成unsigned int
+            ReplyOp reply = new ReplyOp(
+                    flags, getLong(p, 20), getInt(p, 28), getInt(p, 32)
+            );
+            Stats.getInstance().setReceivedOps(1);
+            Stats.getInstance().setReceivedDocs(reply.getReplyDocs());
+
+            this.lock.lock();
+            IReply replyFunc = this.replyFuncs.get(responseTo & 0xff);
+            if(replyFunc != null){
+                this.replyFuncs.remove(responseTo & 0xff);
+            }
+            this.lock.unlock();
+            if(replyFunc != null && reply.getReplyDocs() == 0){
+                replyFunc.reply(null, reply, -1, null);
+            } else {
+                for(int i=0; i != reply.getReplyDocs(); i++){
+                    try {
+                        fill(conn, s); //读取此份bson数据的长度信息
+                    }catch (IOException e){
+                        if(replyFunc != null){
+                            replyFunc.reply(new JmgoException(e.getMessage()), null, -1, null);
+                        }
+                        kill(new JmgoException(e.getMessage()), true);
+                        return;
+                    }
+
+                    byte[] b = new byte[getInt(s, 0)]; // 用于存储这份bson数据
+                    b[0] = s[0];
+                    b[1] = s[1];
+                    b[2] = s[2];
+                    b[3] = s[3];
+
+                    try{
+                        fill(conn, b, 4);
+                    }catch (IOException e){
+                        if(replyFunc != null){
+                            replyFunc.reply(new JmgoException(e.getMessage()), null, -1, null);
+                        }
+                        kill(new JmgoException(e.getMessage()), true);
+                        return;
+                    }
+                    if(replyFunc != null){
+                        replyFunc.reply(null, reply, i, b);
+                    }
+                }
+            }
+            //TODO
+        }
+    }
+
+    private void fill(Socket conn, byte[] b)throws IOException{
+        int l = b.length;
+        int n = conn.getInputStream().read(b);
+        System.out.println("===========");
+        while (n != l){
+            //说明还没有读满
+            byte[] nibyte = new byte[l-n];
+            int ni = conn.getInputStream().read(nibyte);
+            System.arraycopy(nibyte, 0, b, n, ni);
+            n += ni;
+        }
+    }
+
+    private void fill(Socket conn, byte[] b, int pos)throws IOException{
+        int l = b.length - pos;
+        int n = conn.getInputStream().read(b, pos, l);
+        while (n != l){
+            byte[] nibyte = new byte[l-n];
+            int ni = conn.getInputStream().read(b);
+            System.arraycopy(nibyte, 0, b, n+pos, ni);
+            n += ni;
+        }
+    }
+
+    private void kill(JmgoException e, boolean abend){
+        //TODO
+        logger.debug("kill, get exception {}", e.getMessage());
+    }
+
     private void updateDeadline(deadlineType which){
         //TODO
     }
@@ -139,6 +239,22 @@ public class MongoSocket {
         b.add((byte)(i>>16));
         b.add((byte)(i>>24));
         return b;
+    }
+
+    private int getInt(byte[] b, int pos){
+        int ret = (int)b[pos];
+        for(int i=1; i<4; i++){
+            ret = ret | ((int)b[pos+i]<<8);
+        }
+        return ret;
+    }
+
+    private long getLong(byte[] b, int pos){
+        long ret = (long)b[pos];
+        for(int i=1; i<8; i++){
+            ret = ret | ((long)b[pos+i]<<8);
+        }
+        return ret;
     }
 
     private void setInt(List<Byte> b, int pos, int i){
