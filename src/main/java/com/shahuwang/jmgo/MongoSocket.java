@@ -11,7 +11,6 @@ import org.bson.io.BasicOutputBuffer;
 
 import java.io.IOException;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
@@ -130,8 +129,8 @@ public class MongoSocket {
         b.addAll(Arrays.asList(emptyHeader));
         int code = opCode.getCode();
         // 目前的opcode数值比较小，两位就足够了
-        b.add(len+12, (byte)code);
-        b.add(len+13, (byte)(code >> 8));
+        b.set(len+12, (byte)code);
+        b.set(len+13, (byte)(code >> 8));
         return b;
     }
     private List<Byte> addInt(List<Byte> b, int i){
@@ -143,10 +142,10 @@ public class MongoSocket {
     }
 
     private void setInt(List<Byte> b, int pos, int i){
-        b.add(pos, new Byte((byte)i));
-        b.add(pos, new Byte((byte)(i>>8)));
-        b.add(pos, new Byte((byte)(i>>16)));
-        b.add(pos, new Byte((byte)(i>>24)));
+        b.set(pos, new Byte((byte)i));
+        b.set(pos+1, new Byte((byte)(i>>8)));
+        b.set(pos+2, new Byte((byte)(i>>16)));
+        b.set(pos+3, new Byte((byte)(i>>24)));
     }
 
     private List<Byte>addLong(List<Byte> b, long i){
