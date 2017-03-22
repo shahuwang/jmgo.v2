@@ -4,9 +4,14 @@ import com.shahuwang.jmgo.exceptions.JmgoException;
 import com.shahuwang.jmgo.exceptions.WriteIOException;
 import org.apache.logging.log4j.Logger;
 import org.bson.*;
+import org.bson.codecs.BsonDocumentCodec;
+import org.bson.codecs.Codec;
+import org.bson.codecs.EncoderContext;
+import org.bson.io.BasicOutputBuffer;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
@@ -28,6 +33,7 @@ public class MongoSocket {
     private Condition getNonce;
     private Byte[] emptyHeader ={0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     private Logger logger = Log.getLogger(MongoSocket.class.getName());
+    private static Codec<BsonDocument> DocumentCodec = new BsonDocumentCodec();
 
     public MongoSocket(MongoServer server, Socket conn, Duration timeout){
         this.conn = conn;
@@ -161,11 +167,12 @@ public class MongoSocket {
             b.addAll(Arrays.asList(empty));
             return b;
         }
-        BSONObject obj = new BasicBSONObject(doc);
-        
-        byte[] data = BSON.encode(obj);
-        for(byte d: data){
-            b.add(new Byte(d));
+
+        BasicOutputBuffer buff = new BasicOutputBuffer();
+        BsonBinaryWriter writer = new BsonBinaryWriter(buff);
+        DocumentCodec.encode(writer, doc, EncoderContext.builder().build());
+        for(byte i: buff.toByteArray()){
+            b.add(new Byte(i));
         }
         return b;
     }

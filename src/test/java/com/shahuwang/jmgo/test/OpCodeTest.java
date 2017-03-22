@@ -31,7 +31,7 @@ public class OpCodeTest extends TestCase{
             Log.getLogger(OpCodeTest.class.getName()).catching(e);
         }
         MongoSocket mso = new MongoSocket(null, conn, null);
-        BsonDocument doc = new BsonDocument("a", new BsonString("hello world"));
+        BsonDocument doc = new BsonDocument("ab", new BsonString("hello world"));
         List<BsonDocument> docs = new ArrayList<>();
         docs.add(doc);
         IOperator op = new OpInsert("test.test", docs, 0);
