@@ -12,10 +12,15 @@ public class ReplyOp {
         this.firstDoc = firstDoc;
         this.flags = flags;
         this.cursortId = cursortId;
-        this.firstDoc = firstDoc;
+        this.replyDocs = replyDocs;
     }
 
     public int getReplyDocs() {
         return replyDocs;
+    }
+
+    @Override
+    public String toString(){
+        return String.format("flags is %d, cursorId is %d, firstDocs is %d, replyDocs is %d", this.flags, this.cursortId, this.firstDoc, this.replyDocs);
     }
 }

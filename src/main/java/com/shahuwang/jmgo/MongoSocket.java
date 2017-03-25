@@ -33,6 +33,7 @@ public class MongoSocket {
     private Byte[] emptyHeader ={0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     private Logger logger = Log.getLogger(MongoSocket.class.getName());
     private static Codec<BsonDocument> DocumentCodec = new BsonDocumentCodec();
+    private ServerInfo serverInfo;
 
     public MongoSocket(MongoServer server, Socket conn, Duration timeout){
         this.conn = conn;
@@ -48,7 +49,7 @@ public class MongoSocket {
             lops.addAll(fops);
         }
         List<Byte> buf = new ArrayList<Byte>(256);
-        List<requestInfo> requests = new ArrayList<>(lops.size());
+        requestInfo[] requests = new requestInfo[lops.size()];
         int requestCount = 0;
         for(IOperator op: lops){
             logger.debug("Socket {} to {}： serializing op: {}", this.addr, op);
@@ -65,12 +66,27 @@ public class MongoSocket {
                     logger.debug("Socket {} to {}: serializing document for insertion: {}", this, this.addr, doc);
                     buf = addBSON(buf, doc);
                 }
+            } else if (op instanceof OpQuery){
+                buf = addHeader(buf, op.getOpCode());
+                buf = addInt(buf, ((OpQuery) op).getFlags());
+                buf = addCString(buf, ((OpQuery) op).getCllection());
+                buf = addInt(buf, ((OpQuery) op).getSkip());
+                buf = addInt(buf, ((OpQuery) op).getLimit());
+                buf = addBSON(buf, ((OpQuery) op).finalQuery(this));
+                if(((OpQuery) op).getSelector() != null){
+                    buf = addBSON(buf, ((OpQuery) op).getSelector());
+                }
+                replyFunc = ((OpQuery) op).getReplyFunc();
             }
             //TODO
 
             setInt(buf, start, buf.size() - start);
             if (replyFunc != null){
-                //TODO
+                requestInfo request = new requestInfo();
+                request.replyFunc = replyFunc;
+                request.bufferPos = start;
+                requests[requestCount] = request;
+                requestCount++;
             }
 
         }
@@ -86,7 +102,7 @@ public class MongoSocket {
         }
         this.nextRequestId = requestId + requestCount;
         for(int i=0; i != requestCount; i++){
-            requestInfo request = requests.get(i);
+            requestInfo request = requests[i];
             setInt(buf, request.bufferPos+4, requestId);
             this.replyFuncs.put(new Integer(requestId), request.replyFunc);
             requestId++;
@@ -106,6 +122,13 @@ public class MongoSocket {
         this.lock.unlock();
 
 
+    }
+
+    public ServerInfo getServerInfo() {
+        this.lock.lock();
+        ServerInfo info = this.serverInfo;
+        this.lock.unlock();
+        return info;
     }
 
     private void readLoop(){
@@ -181,7 +204,6 @@ public class MongoSocket {
     private void fill(Socket conn, byte[] b)throws IOException{
         int l = b.length;
         int n = conn.getInputStream().read(b);
-        System.out.println("===========");
         while (n != l){
             //说明还没有读满
             byte[] nibyte = new byte[l-n];
