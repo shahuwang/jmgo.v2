@@ -1,6 +1,7 @@
 package com.shahuwang.jmgo;
 
 import com.shahuwang.jmgo.exceptions.JmgoException;
+import com.shahuwang.jmgo.exceptions.SocketDeadException;
 import com.shahuwang.jmgo.exceptions.WriteIOException;
 import org.apache.logging.log4j.Logger;
 import org.bson.*;
@@ -11,6 +12,7 @@ import org.bson.io.BasicOutputBuffer;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.SocketException;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.locks.Condition;
@@ -22,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class MongoSocket {
     private ServerAddr addr;
-    private JmgoException dead = null;
+    private SocketDeadException dead = null;
     private Map<Integer, IReply> replyFuncs = new HashMap<>();
     private int nextRequestId;
     private Lock lock = new ReentrantLock();
@@ -42,7 +44,7 @@ public class MongoSocket {
         new Thread(() -> readLoop()).start();
     }
 
-    public void Query(IOperator ...ops)throws WriteIOException{
+    public void Query(IOperator ...ops)throws WriteIOException, SocketDeadException{
         List<IOperator> lops = Arrays.asList(ops);
         List<IOperator> fops = this.flushLogout();
         if(fops.size() > 0){
@@ -120,7 +122,15 @@ public class MongoSocket {
         }
         this.lock.lock();
         if(this.dead != null){
-            //TODO
+            JmgoException dead = this.dead;
+            this.lock.unlock();
+            for(int i=0; i!=requestCount; i++){
+                requestInfo request = requests[i];
+                if(request.replyFunc != null){
+                    request.replyFunc.reply(dead, null, -1, null);
+                }
+            }
+            throw this.dead;
         }
         boolean wasWaiting = this.replyFuncs.isEmpty();
         int requestId = this.nextRequestId + 1;
@@ -137,12 +147,12 @@ public class MongoSocket {
         }
         logger.debug("Socket {} to {}: sending {} op(s) ({} bytes)", this, this.addr, lops.size(), buf.size());
         Stats.getInstance().setSentOps(lops.size());
-        updateDeadline(deadlineType.WRITE_DEAD_LINE);
+        updateDeadline();
         try{
             this.conn.getOutputStream().write(iByteToArray(buf));
         }catch (IOException e){
             if(!wasWaiting && requestCount > 0){
-                this.updateDeadline(deadlineType.READ_DEAD_LINE);
+                this.updateDeadline();
             }
             this.lock.unlock();
             throw new WriteIOException(e.getMessage());
@@ -157,6 +167,10 @@ public class MongoSocket {
         ServerInfo info = this.serverInfo;
         this.lock.unlock();
         return info;
+    }
+
+    public void  close(){
+        this.kill(new JmgoException("Closed explicitly"), false);
     }
 
     private void readLoop(){
@@ -225,7 +239,17 @@ public class MongoSocket {
                     }
                 }
             }
-            //TODO
+            this.lock.lock();
+            if(this.replyFuncs.isEmpty()){
+                try{
+                    this.conn.setSoTimeout(0);
+                }catch (SocketException e){
+                    logger.catching(e);
+                }
+            }else{
+                this.updateDeadline();
+            }
+            this.lock.unlock();
         }
     }
 
@@ -245,12 +269,46 @@ public class MongoSocket {
     }
 
     private void kill(JmgoException e, boolean abend){
-        //TODO
-        logger.debug("kill, get exception {}", e.getMessage());
+        this.lock.lock();
+        if(this.dead!=null){
+            logger.debug("Socket {} to {}: killed again");
+            this.lock.unlock();
+            return;
+        }
+        logger.info("Socket {} to {}: closing: {} (abend={})", this, this.addr, e.getMessage(), abend);
+        this.dead = new SocketDeadException(e.getMessage());
+        try{
+            this.conn.close();
+        }catch (IOException err){
+            logger.catching(err);
+        }
+        Stats.getInstance().setSocketsAlive(-1);
+        Map<Integer, IReply> replyFuncs = this.replyFuncs;
+        this.replyFuncs = new HashMap<>();
+        MongoServer server = this.server;
+        this.server = null;
+        this.getNonce.signalAll();
+        this.lock.unlock();
+        for(IReply reply: replyFuncs.values()){
+            logger.info("Socket {} to {}: notifying replyFunc of closed socket: {}", this, this.addr, e.getMessage());
+            reply.reply(e, null, -1, null);
+        }
+        if(abend){
+            server.abendSocket(this);
+        }
     }
 
-    private void updateDeadline(deadlineType which){
-        //TODO
+    private void updateDeadline(){
+        //Socket并没有提供writetimeout和readtimeout，而是合并提交了
+        Duration when = Duration.ofSeconds(0);
+        if(!this.timeout.isZero()){
+            when = Duration.ofSeconds(timeout.getSeconds());
+        }
+        try {
+            this.conn.setSoTimeout((int)when.toMillis());
+        }catch (SocketException e){
+            logger.catching(e);
+        }
     }
 
     private List<IOperator> flushLogout() {
@@ -345,11 +403,6 @@ public class MongoSocket {
     private class requestInfo{
         private int bufferPos;
         private IReply replyFunc;
-    }
-
-    private enum deadlineType{
-        READ_DEAD_LINE,
-        WRITE_DEAD_LINE;
     }
 
 }

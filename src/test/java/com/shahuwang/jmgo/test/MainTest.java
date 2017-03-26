@@ -2,6 +2,7 @@ package com.shahuwang.jmgo.test;
 
 import com.shahuwang.jmgo.*;
 import com.shahuwang.jmgo.exceptions.JmgoException;
+import com.shahuwang.jmgo.exceptions.SocketDeadException;
 import com.shahuwang.jmgo.exceptions.WriteIOException;
 import junit.framework.TestCase;
 import org.apache.logging.log4j.Logger;
@@ -98,7 +99,7 @@ public class MainTest extends TestCase{
         MongoSocket mso = new MongoSocket(null, conn, null);
         try {
             mso.Query(ops);
-        }catch (WriteIOException e){
+        }catch (WriteIOException| SocketDeadException e){
             logger.catching(e);
         }
         try {
