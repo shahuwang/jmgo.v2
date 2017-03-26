@@ -77,6 +77,13 @@ public class MongoSocket {
                     buf = addBSON(buf, ((OpQuery) op).getSelector());
                 }
                 replyFunc = ((OpQuery) op).getReplyFunc();
+            } else if(op instanceof OpUpdate){
+                buf = addHeader(buf, op.getOpCode());
+                buf = addInt(buf, 0);
+                buf = addCString(buf, ((OpUpdate) op).getCollection());
+                buf = addInt(buf, ((OpUpdate) op).getFlags());
+                buf = addBSON(buf, ((OpUpdate) op).getSelector());
+                buf = addBSON(buf, ((OpUpdate) op).getUpdate());
             }
             //TODO
 
@@ -202,15 +209,7 @@ public class MongoSocket {
     }
 
     private void fill(Socket conn, byte[] b)throws IOException{
-        int l = b.length;
-        int n = conn.getInputStream().read(b);
-        while (n != l){
-            //说明还没有读满
-            byte[] nibyte = new byte[l-n];
-            int ni = conn.getInputStream().read(nibyte);
-            System.arraycopy(nibyte, 0, b, n, ni);
-            n += ni;
-        }
+        fill(conn, b, 0);
     }
 
     private void fill(Socket conn, byte[] b, int pos)throws IOException{

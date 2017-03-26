@@ -38,27 +38,12 @@ public class MainTest extends TestCase{
     }
 
     public void testInsert(){
-        Socket conn = null;
-        try {
-            conn = new Socket("127.0.0.1", 27017);
-        }catch (IOException e){
-            Log.getLogger(MainTest.class.getName()).catching(e);
-        }
-        MongoSocket mso = new MongoSocket(null, conn, null);
         BsonDocument doc = new BsonDocument("ab", new BsonString("hello world"));
         List<BsonDocument> docs = new ArrayList<>();
         docs.add(doc);
         IOperator op = new OpInsert("test.test", docs, 0);
-        try {
-            mso.Query(op);
-        }catch (WriteIOException e){
-            System.out.println(e.getMessage());
-        }
-        try{
-            conn.close();
-        }catch (IOException  e){
-            System.out.println(e.getMessage());
-        }
+        Socket conn = buildConn();
+        writeQuery(conn, op);
     }
 
     public void testQuery(){
@@ -70,23 +55,44 @@ public class MainTest extends TestCase{
             logger.debug("reply op is {}", rop);
         };
         query.setReplyFuncs(reply);
+        Socket conn = buildConn();
+        writeQuery(conn, query);
+    }
+
+    public void testUpdate(){
+        OpUpdate op = new OpUpdate();
+        BsonDocument selector = new BsonDocument("ab", new BsonString("hello world"));
+        BsonDocument updator = new BsonDocument("$set", new BsonDocument("ab", new BsonString("你好")));
+        op.setCollection("test.test")
+                .setSelector(selector)
+                .setUpdate(updator);
+        Socket conn = buildConn();
+        writeQuery(conn, op);
+
+    }
+
+    private Socket buildConn(){
         Socket conn = null;
         try {
             conn = new Socket("127.0.0.1", 27017);
         }catch (IOException e){
             logger.catching(e);
         }
+        return conn;
+    }
+
+    private void writeQuery(Socket conn, IOperator ...ops){
         MongoSocket mso = new MongoSocket(null, conn, null);
         try {
-            mso.Query(query);
+            mso.Query(ops);
         }catch (WriteIOException e){
             logger.catching(e);
         }
         try {
-            Thread.sleep(10000);
             conn.close();
-        }catch (IOException|InterruptedException e){
+        }catch (IOException e){
             logger.catching(e);
         }
+
     }
 }
