@@ -36,12 +36,31 @@ public class MongoSocket {
     private Logger logger = Log.getLogger(MongoSocket.class.getName());
     private static Codec<BsonDocument> DocumentCodec = new BsonDocumentCodec();
     private ServerInfo serverInfo;
+    private List<Credential> creds;
+    private List<Credential> logout;
 
     public MongoSocket(MongoServer server, Socket conn, Duration timeout){
         this.conn = conn;
         this.server = server;
         this.getNonce = this.lock.newCondition();
         new Thread(() -> readLoop()).start();
+    }
+
+    public void login(Credential cred){
+        if(cred.getMechanism() == "" && this.serverInfo.getMaxWireVersion() >= 3){
+            cred.setMechanism("SCRAM-SHA-1"); // 默认的机制
+        }
+        for(Credential socketCred: this.creds){
+            if(socketCred == cred){
+                logger.debug("Socket {} to {}: login: db={}, user={} (already logged in)", this, this.addr, cred.getSource(), cred.getUsername());
+                this.lock.unlock();
+                return;
+            }
+        }
+        if(this.dropLogout(cred)){
+            
+        }
+
     }
 
     public void Query(IOperator ...ops)throws WriteIOException, SocketDeadException{
@@ -251,6 +270,16 @@ public class MongoSocket {
             }
             this.lock.unlock();
         }
+    }
+
+    private boolean dropLogout(Credential cred){
+        for(Credential socketCred: this.logout){
+            if(socketCred == cred){
+                this.logout.remove(cred);
+                return true;
+            }
+        }
+        return false;
     }
 
     private void fill(Socket conn, byte[] b)throws IOException{
