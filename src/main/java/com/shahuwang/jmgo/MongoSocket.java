@@ -84,6 +84,12 @@ public class MongoSocket {
                 buf = addInt(buf, ((OpUpdate) op).getFlags());
                 buf = addBSON(buf, ((OpUpdate) op).getSelector());
                 buf = addBSON(buf, ((OpUpdate) op).getUpdate());
+            } else if(op instanceof OpDelete){
+                buf = addHeader(buf, op.getOpCode());
+                buf = addInt(buf, 0);
+                buf = addCString(buf, ((OpDelete) op).getCollection());
+                buf = addInt(buf, ((OpDelete) op).getFlags());
+                buf = addBSON(buf, ((OpDelete) op).getSelector());
             }
             //TODO
 

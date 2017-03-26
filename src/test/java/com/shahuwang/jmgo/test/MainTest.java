@@ -71,6 +71,19 @@ public class MainTest extends TestCase{
 
     }
 
+    public void testDelete(){
+        BsonDocument doc = new BsonDocument("delete", new BsonString("to delete"));
+        List<BsonDocument> docs = new ArrayList<>();
+        docs.add(doc);
+        IOperator op = new OpInsert("test.test", docs, 0);
+        OpDelete delete = new OpDelete();
+        delete.setCollection("test.test")
+                .setFlags(0)
+                .setSelector(doc);
+        Socket conn = buildConn();
+        writeQuery(conn, op, delete);
+    }
+
     private Socket buildConn(){
         Socket conn = null;
         try {

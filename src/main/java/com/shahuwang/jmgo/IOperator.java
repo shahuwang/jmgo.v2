@@ -1,5 +1,7 @@
 package com.shahuwang.jmgo;
 
+import org.bson.BsonDocument;
+
 /**
  * Created by rickey on 2017/3/21.
  */
