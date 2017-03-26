@@ -90,8 +90,23 @@ public class MongoSocket {
                 buf = addCString(buf, ((OpDelete) op).getCollection());
                 buf = addInt(buf, ((OpDelete) op).getFlags());
                 buf = addBSON(buf, ((OpDelete) op).getSelector());
+            } else if(op instanceof OpGetMore){
+                buf = addHeader(buf, op.getOpCode());
+                buf = addInt(buf, 0);
+                buf = addCString(buf, ((OpGetMore) op).getCollection());
+                buf = addInt(buf, ((OpGetMore) op).getLimit());
+                buf = addLong(buf, ((OpGetMore) op).getCursorId());
+                replyFunc = ((OpGetMore) op).getReplyFunc();
+            } else if(op instanceof OpKillCursors){
+                buf = addHeader(buf, op.getOpCode());
+                buf = addInt(buf, 0);
+                buf = addInt(buf, ((OpKillCursors) op).getCursorIds().length);
+                for(long cursorid: ((OpKillCursors) op).getCursorIds()){
+                    buf = addLong(buf, cursorid);
+                }
+            }else{
+                throw new RuntimeException("internal error: unknown operation type");
             }
-            //TODO
 
             setInt(buf, start, buf.size() - start);
             if (replyFunc != null){
