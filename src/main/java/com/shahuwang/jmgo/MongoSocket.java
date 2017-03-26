@@ -47,6 +47,7 @@ public class MongoSocket {
     }
 
     public void login(Credential cred){
+        this.lock.lock();
         if(cred.getMechanism() == "" && this.serverInfo.getMaxWireVersion() >= 3){
             cred.setMechanism("SCRAM-SHA-1"); // 默认的机制
         }
@@ -58,9 +59,17 @@ public class MongoSocket {
             }
         }
         if(this.dropLogout(cred)){
+            logger.debug("Socket {} to {}: login: db={}, user={} (cached)", this, this.addr, cred.getSource(), cred.getUsername());
+            this.creds.add(cred);
+            this.lock.unlock();
+            return;
+        }
+        this.lock.unlock();
+        logger.debug("Socket {} to {}: login: db={}, user={} (cached)", this, this.addr, cred.getSource(), cred.getUsername());
+        String mech = cred.getMechanism();
+        if(mech == "" || mech == "MONGODB-CR" || mech=="MONGO-CR"){
             
         }
-
     }
 
     public void Query(IOperator ...ops)throws WriteIOException, SocketDeadException{
