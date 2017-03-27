@@ -68,7 +68,15 @@ public class MongoSocket {
         logger.debug("Socket {} to {}: login: db={}, user={} (cached)", this, this.addr, cred.getSource(), cred.getUsername());
         String mech = cred.getMechanism();
         if(mech == "" || mech == "MONGODB-CR" || mech=="MONGO-CR"){
-            
+            // mongo 3.0 版之前的默认认证方法
+            this.loginClassic(cred);
+        } else if(mech == "PLAIN") {
+            // 商业版的ldap，使用SASL的plain模式
+            this.loginPlain(cred);
+        } else if(mech == "MONGODB-X509"){
+            this.loginX509(cred);
+        }else{
+            this.loginSASL(cred);
         }
     }
 
@@ -199,6 +207,24 @@ public class MongoSocket {
 
     public void  close(){
         this.kill(new JmgoException("Closed explicitly"), false);
+    }
+
+    private void loginClassic(Credential cred){
+        //TODO
+    }
+
+    private void loginPlain(Credential cred){
+        //TODO
+    }
+
+    private void loginX509(Credential cred){
+        //TODO
+    }
+
+    private void loginSASL(Credential cred){
+        if(cred.getMechanism() == "SCRAM-SHA-1"){
+
+        }
     }
 
     private void readLoop(){
