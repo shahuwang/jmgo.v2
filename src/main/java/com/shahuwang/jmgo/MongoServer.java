@@ -1,10 +1,15 @@
 package com.shahuwang.jmgo;
 
 
+import com.shahuwang.jmgo.exceptions.*;
 import org.apache.logging.log4j.Logger;
+import org.bson.BsonDocument;
+import org.bson.BsonInt32;
 
+import java.net.Socket;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -21,6 +26,8 @@ public class MongoServer {
     private SyncChan<Boolean> sync;
     private Duration pingValue;
     private ReadWriteLock rwlock = new ReentrantReadWriteLock();
+    private ServerInfo info;
+    public static final Duration pingDelay = Duration.ofSeconds(15);
 
     Logger logger = Log.getLogger(MongoServer.class.getName());
 
@@ -63,7 +70,118 @@ public class MongoServer {
         return liveSockets;
     }
 
-    protected void pinger(boolean loop){
+    public MongoSocket acquireSocket(int poolLimit, Duration timeout)throws SocketAbendException, PoolLimitException, ServerClosedException{
+        while (true){
+            this.rwlock.writeLock().lock();
+            MongoSocket socket;
+            boolean abended = this.abended;
+            if(this.closed){
+                this.rwlock.writeLock().unlock();
+                if(abended){
+                    throw new SocketAbendException();
+                }
+                return null;
+            }
 
+            int n = this.unusedSockets.size();
+            // live - unused 等于当前正在使用的socket数量
+            if(poolLimit > 0 && this.liveSockets.size() - n >= poolLimit){
+                this.rwlock.writeLock().unlock();
+                throw new PoolLimitException();
+            }
+
+            if(n > 0){
+                socket = this.unusedSockets.get(n - 1);
+                this.unusedSockets.remove(n - 1);
+                ServerInfo info = this.info;
+                this.rwlock.writeLock().unlock();
+                try {
+                    socket.initialAcquire(info, timeout);
+                }catch (JmgoException e){
+                    logger.catching(e);
+                    continue;
+                }
+            }else{
+                this.rwlock.writeLock().unlock();
+                try{
+                    socket = this.connect(timeout);
+                    this.rwlock.writeLock().lock();
+                    if(this.closed){
+                        this.rwlock.writeLock().unlock();
+                        socket.release();
+                        socket.close();
+                        if(abended){
+                            throw new SocketAbendException();
+                        }
+                        throw new ServerClosedException();
+                    }
+                    this.liveSockets.add(socket);
+                    this.rwlock.writeLock().unlock();
+                }catch (JmgoException e){
+                    logger.catching(e);
+                }
+            }
+        }
+    }
+
+    public MongoSocket connect(Duration timeout)throws ConnectionException{
+        this.rwlock.readLock().lock();
+        boolean ismaster = this.info.isMaster();
+        IDialer dial = this.dialer;
+        this.rwlock.readLock().unlock();
+        logger.info("Establishing new connection to %s (timeout=%s)...", this.addr, timeout);
+        Socket conn;
+        try{
+            conn = dialer.dial(this.addr, timeout);
+        }catch (JmgoException e){
+            logger.error("Connection to {} failed: {}", this.addr.getTcpaddr(), e);
+            throw new ConnectionException(e.getMessage());
+        }
+        logger.info("Connection to {} established", this.addr.getTcpaddr());
+        Stats.getInstance().setConn(1, ismaster);
+        return new MongoSocket(this, conn, timeout);
+    }
+
+    public void recycleSocket(MongoSocket socket){
+        this.rwlock.writeLock().lock();
+        if(!this.closed){
+            this.unusedSockets.add(socket);
+        }
+        this.rwlock.writeLock().unlock();
+    }
+
+    protected void pinger(boolean loop){
+        Duration delay;
+        boolean racedetector = BuildConfig.getInstance().getRacedetector();
+        if (racedetector) {
+            synchronized (GlobalMutex.class){
+                delay = this.pingDelay;
+            }
+        }else {
+            delay = this.pingDelay;
+        }
+        BsonDocument query = new BsonDocument("ping", new BsonInt32(1));
+        OpQuery op = new OpQuery();
+        op.setCollection("admin.$cmd").setQuery(query).setFlags(OpQueryFlag.flagSlaveOk).setLimit(-1);
+        while (true){
+            if(loop){
+                try{
+                    TimeUnit.SECONDS.sleep(delay.getSeconds());
+                }catch (InterruptedException e){
+                    logger.error(e.getMessage());
+                }
+
+                try{
+                    MongoSocket socket = this.acquireSocket(0, delay);
+                    long start = System.currentTimeMillis();
+                    socket.simpleQuery(op);
+                }catch (ServerClosedException|PoolLimitException | SocketAbendException e){
+                    logger.catching(e);
+                }
+                if(!loop){
+                    return;
+                }
+            }
+        }
     }
 }

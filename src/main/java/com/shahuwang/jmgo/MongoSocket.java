@@ -38,6 +38,7 @@ public class MongoSocket {
     private ServerInfo serverInfo;
     private List<Credential> creds;
     private List<Credential> logout;
+    private int references;
 
     public MongoSocket(MongoServer server, Socket conn, Duration timeout){
         this.conn = conn;
@@ -78,6 +79,47 @@ public class MongoSocket {
         }else{
             this.loginSASL(cred);
         }
+    }
+
+    public void initialAcquire(ServerInfo info, Duration timeout)throws SocketDeadException{
+        this.lock.lock();
+        if(this.references > 0){
+            throw new RuntimeException("Socket acquired out of cache with references");
+        }
+        if(this.dead != null){
+            SocketDeadException dead = this.dead;
+            this.lock.unlock();
+            throw dead;
+        }
+        this.references++;
+        this.serverInfo = serverInfo;
+        this.timeout = timeout;
+        Stats.getInstance().setSocketsInUse(1);
+        Stats.getInstance().setSocketRefs(1);
+        this.lock.unlock();
+    }
+
+    public void release(){
+        this.lock.lock();
+        if(this.references == 0){
+            throw new RuntimeException("socket.Release() with references == 0");
+        }
+        this.references--;
+        Stats.getInstance().setSocketRefs(-1);
+        if(this.references == 0){
+            Stats.getInstance().setSocketsInUse(-1);
+            MongoServer server = this.server;
+            this.lock.unlock();
+            if(server != null){
+                server.recycleSocket(this);
+            }
+        }else{
+            this.lock.unlock();
+        }
+    }
+
+    public byte[] simpleQuery(OpQuery op){
+        op.getReplyFunc().
     }
 
     public void Query(IOperator ...ops)throws WriteIOException, SocketDeadException{
