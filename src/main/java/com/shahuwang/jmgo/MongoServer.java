@@ -25,8 +25,11 @@ public class MongoServer {
     private IDialer dialer;
     private SyncChan<Boolean> sync;
     private Duration pingValue;
+    private int pingIndex;
+    private int pingCount;
     private ReadWriteLock rwlock = new ReentrantReadWriteLock();
     private ServerInfo info;
+    private Duration[] pingWindow = new Duration[6];
     public static final Duration pingDelay = Duration.ofSeconds(15);
 
     Logger logger = Log.getLogger(MongoServer.class.getName());
@@ -175,7 +178,26 @@ public class MongoServer {
                     MongoSocket socket = this.acquireSocket(0, delay);
                     long start = System.currentTimeMillis();
                     socket.simpleQuery(op);
-                }catch (ServerClosedException|PoolLimitException | SocketAbendException e){
+                    long end = System.currentTimeMillis();
+                    Duration delay2 = Duration.ofMillis(end - start);
+                    this.pingWindow[this.pingIndex] = delay2;
+                    this.pingIndex  = (this.pingIndex + 1) % this.pingWindow.length;
+                    this.pingCount++;
+                    Duration max = Duration.ofSeconds(0);
+                    for(int i=0; i<this.pingWindow.length && i<this.pingCount;i++){
+                        if(this.pingWindow[i].compareTo(max) > 0){
+                            max = this.pingWindow[i];
+                        }
+                    }
+                    socket.release();
+                    this.rwlock.writeLock().lock();;
+                    if(this.closed){
+                        loop=false;
+                    }
+                    this.pingValue = max;
+                    this.rwlock.writeLock().unlock();
+
+                }catch (JmgoException e){
                     logger.catching(e);
                 }
                 if(!loop){

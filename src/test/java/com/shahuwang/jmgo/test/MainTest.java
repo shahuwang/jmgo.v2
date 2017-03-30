@@ -12,6 +12,7 @@ import org.bson.BsonString;
 import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -96,7 +97,9 @@ public class MainTest extends TestCase{
     }
 
     private void writeQuery(Socket conn, IOperator ...ops){
-        MongoSocket mso = new MongoSocket(null, conn, null);
+        SyncChan<Boolean> chan = new SyncChan<>();
+        MongoServer server = new MongoServer(null, chan, new Dialer());
+        MongoSocket mso = new MongoSocket(server, conn, Duration.ofSeconds(30));
         try {
             mso.Query(ops);
         }catch (WriteIOException| SocketDeadException e){
@@ -109,4 +112,6 @@ public class MainTest extends TestCase{
         }
 
     }
+
+    class Dialer implements IDialer{};
 }

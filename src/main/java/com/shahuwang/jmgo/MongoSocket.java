@@ -44,6 +44,7 @@ public class MongoSocket {
         this.conn = conn;
         this.server = server;
         this.getNonce = this.lock.newCondition();
+        this.timeout = timeout;
         new Thread(() -> readLoop()).start();
     }
 
@@ -118,8 +119,24 @@ public class MongoSocket {
         }
     }
 
-    public byte[] simpleQuery(OpQuery op){
-        op.getReplyFunc().
+    public byte[] simpleQuery(OpQuery op)throws WriteIOException, SocketDeadException, JmgoException{
+        SyncChan<List<Byte>> wait = new SyncChan<>();
+        Lock change = new ReentrantLock();
+        SimpleQueryReply reply = new SimpleQueryReply(wait, change);
+        op.setReplyFuncs(reply);
+        Query(op);
+        change.lock();
+        List<Byte> doc = wait.take();
+        if(reply.getReplyErr() != null){
+            throw reply.getReplyErr();
+        }else{
+            byte[] newDoc = new byte[doc.size()];
+            for(int i=0; i<doc.size(); i++){
+                Byte b = doc.get(i);
+                newDoc[i] = b.byteValue();
+            }
+            return newDoc;
+        }
     }
 
     public void Query(IOperator ...ops)throws WriteIOException, SocketDeadException{
