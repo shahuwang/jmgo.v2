@@ -98,7 +98,13 @@ public class MainTest extends TestCase{
 
     private void writeQuery(Socket conn, IOperator ...ops){
         SyncChan<Boolean> chan = new SyncChan<>();
-        MongoServer server = new MongoServer(null, chan, new Dialer());
+        ServerAddr addr;
+        try {
+            addr = new ServerAddr("127.0.0.1:27017");
+        }catch (JmgoException e){
+            throw new RuntimeException(e.getMessage());
+        }
+        MongoServer server = new MongoServer(addr, chan, new Dialer());
         MongoSocket mso = new MongoSocket(server, conn, Duration.ofSeconds(30));
         try {
             mso.Query(ops);
@@ -106,8 +112,9 @@ public class MainTest extends TestCase{
             logger.catching(e);
         }
         try {
+            Thread.sleep(10000);
             conn.close();
-        }catch (IOException e){
+        }catch (IOException|InterruptedException e){
             logger.catching(e);
         }
 

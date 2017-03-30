@@ -8,6 +8,7 @@ import org.bson.BsonInt32;
 
 import java.net.Socket;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -18,8 +19,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class MongoServer {
     private ServerAddr addr;
-    private List<MongoSocket> unusedSockets;
-    private List<MongoSocket> liveSockets;
+    private List<MongoSocket> unusedSockets = new ArrayList<>();
+    private List<MongoSocket> liveSockets = new ArrayList<>();
     private boolean closed;
     private boolean abended;
     private IDialer dialer;
@@ -28,7 +29,7 @@ public class MongoServer {
     private int pingIndex;
     private int pingCount;
     private ReadWriteLock rwlock = new ReentrantReadWriteLock();
-    private ServerInfo info;
+    private ServerInfo info = new ServerInfo(false, false, null,  "", 0);
     private Duration[] pingWindow = new Duration[6];
     public static final Duration pingDelay = Duration.ofSeconds(15);
 
