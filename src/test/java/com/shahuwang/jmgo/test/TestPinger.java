@@ -21,7 +21,7 @@ public class TestPinger extends TestCase{
         }
         MongoServer server = new MongoServer(addr, chan, new Dialer());
         try {
-            Thread.sleep(1000 * 300);
+            Thread.sleep(1000 * 160);
         }catch (InterruptedException e){
             System.out.println(e.getMessage());
         }

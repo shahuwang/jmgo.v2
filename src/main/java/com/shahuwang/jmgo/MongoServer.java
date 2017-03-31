@@ -198,10 +198,9 @@ public class MongoServer {
                     }
                     this.pingValue = max;
                     this.rwlock.writeLock().unlock();
-                    logger.info("pinger run one time==============");
 
                 }catch (JmgoException e){
-                    logger.catching(e);
+                    logger.debug("pinger get an exception {}", e);
                 }
                 if(!loop){
                     return;

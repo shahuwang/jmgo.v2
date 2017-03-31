@@ -125,9 +125,10 @@ public class MongoSocket {
         SimpleQueryReply reply = new SimpleQueryReply(wait, change);
         op.setReplyFuncs(reply);
         Query(op);
-        change.lock();
         List<Byte> doc = wait.take();
+        change.lock();
         if(reply.getReplyErr() != null){
+            change.unlock();
             throw reply.getReplyErr();
         }else{
             byte[] newDoc = new byte[doc.size()];
@@ -135,6 +136,7 @@ public class MongoSocket {
                 Byte b = doc.get(i);
                 newDoc[i] = b.byteValue();
             }
+            change.unlock();
             return newDoc;
         }
     }
@@ -420,6 +422,7 @@ public class MongoSocket {
             reply.reply(e, null, -1, null);
         }
         if(abend){
+            logger.info("abend socket");
             server.abendSocket(this);
         }
     }
