@@ -77,7 +77,7 @@ public class MongoServer {
     public MongoSocket acquireSocket(int poolLimit, Duration timeout)throws SocketAbendException, PoolLimitException, ServerClosedException{
         while (true){
             this.rwlock.writeLock().lock();
-            MongoSocket socket;
+            MongoSocket socket = null;
             boolean abended = this.abended;
             if(this.closed){
                 this.rwlock.writeLock().unlock();
@@ -125,6 +125,7 @@ public class MongoServer {
                     logger.catching(e);
                 }
             }
+            return socket;
         }
     }
 
@@ -133,7 +134,7 @@ public class MongoServer {
         boolean ismaster = this.info.isMaster();
         IDialer dial = this.dialer;
         this.rwlock.readLock().unlock();
-        logger.info("Establishing new connection to %s (timeout=%s)...", this.addr, timeout);
+        logger.info("Establishing new connection to {} (timeout={})...", this.addr, timeout);
         Socket conn;
         try{
             conn = dialer.dial(this.addr, timeout);
@@ -197,6 +198,7 @@ public class MongoServer {
                     }
                     this.pingValue = max;
                     this.rwlock.writeLock().unlock();
+                    logger.info("pinger run one time==============");
 
                 }catch (JmgoException e){
                     logger.catching(e);

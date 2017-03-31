@@ -35,7 +35,7 @@ public class MongoSocket {
     private Byte[] emptyHeader ={0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     private Logger logger = Log.getLogger(MongoSocket.class.getName());
     private static Codec<BsonDocument> DocumentCodec = new BsonDocumentCodec();
-    private ServerInfo serverInfo;
+    private ServerInfo serverInfo = new ServerInfo(false, false, null, "", 0);
     private List<Credential> creds;
     private List<Credential> logout;
     private int references;
@@ -383,6 +383,9 @@ public class MongoSocket {
     private void fill(Socket conn, byte[] b, int pos)throws IOException{
         int l = b.length - pos;
         int n = conn.getInputStream().read(b, pos, l);
+        if(n == -1){
+            return;
+        }
         while (n != l){
             byte[] nibyte = new byte[l-n];
             int ni = conn.getInputStream().read(b);

@@ -23,7 +23,8 @@ public class BuildConfig {
     Logger logger = LogManager.getLogger(BuildConfig.class.getName());
     private BuildConfig() {
         try{
-            InputStream in = new FileInputStream("build.properties");
+            String filename = getClass().getResource("/build.properties").getFile();
+            InputStream in = new FileInputStream(filename);
             prop.load(in);
         }catch (FileNotFoundException e){
             logger.error(e);
