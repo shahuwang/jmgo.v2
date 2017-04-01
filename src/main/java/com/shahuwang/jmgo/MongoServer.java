@@ -74,6 +74,10 @@ public class MongoServer {
         return liveSockets;
     }
 
+    public ServerInfo getInfo() {
+        return info;
+    }
+
     public MongoSocket acquireSocket(int poolLimit, Duration timeout)throws SocketAbendException, PoolLimitException, ServerClosedException{
         while (true){
             this.rwlock.writeLock().lock();

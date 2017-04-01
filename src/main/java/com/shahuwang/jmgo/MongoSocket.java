@@ -45,6 +45,11 @@ public class MongoSocket {
         this.server = server;
         this.getNonce = this.lock.newCondition();
         this.timeout = timeout;
+        try {
+            this.initialAcquire(server.getInfo(), timeout);
+        }catch (SocketDeadException e){
+            throw new RuntimeException(e.getMessage());
+        }
         new Thread(() -> readLoop()).start();
     }
 
@@ -103,6 +108,7 @@ public class MongoSocket {
     public void release(){
         this.lock.lock();
         if(this.references == 0){
+            this.lock.unlock();
             throw new RuntimeException("socket.Release() with references == 0");
         }
         this.references--;
