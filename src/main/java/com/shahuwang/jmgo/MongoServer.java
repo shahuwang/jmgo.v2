@@ -5,11 +5,13 @@ import com.shahuwang.jmgo.exceptions.*;
 import org.apache.logging.log4j.Logger;
 import org.bson.BsonDocument;
 import org.bson.BsonInt32;
+import org.bson.BsonValue;
 
 import java.net.Socket;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -157,6 +159,38 @@ public class MongoServer {
             this.unusedSockets.add(socket);
         }
         this.rwlock.writeLock().unlock();
+    }
+
+    protected boolean hasTags(BsonDocument serverTags){
+        BsonDocument tags = this.info.getTags();
+        for(Map.Entry<String, BsonValue> tag: serverTags.entrySet()){
+             BsonValue value = tag.getValue();
+             String key = tag.getKey();
+             if(tags.containsKey(key)){
+                 BsonValue originValue = tags.get(key);
+                 if(!value.equals(originValue)){
+                     return false;
+                 }
+             }else{
+                 return false;
+             }
+        }
+        return true;
+    }
+
+    public void close(){
+        this.rwlock.writeLock().lock();
+        this.closed = true;
+        List<MongoSocket> lilveSockets = this.liveSockets;
+        List<MongoSocket> unusedSockets = this.unusedSockets;
+        this.liveSockets = new ArrayList<>();
+        this.unusedSockets = new ArrayList<>();
+        this.rwlock.writeLock().unlock();
+        for(MongoSocket s: lilveSockets){
+            s.close();
+        }
+        lilveSockets.clear();
+        unusedSockets.clear();
     }
 
     protected void pinger(boolean loop){

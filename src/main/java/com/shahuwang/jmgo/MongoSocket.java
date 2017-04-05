@@ -105,6 +105,18 @@ public class MongoSocket {
         this.lock.unlock();
     }
 
+    public ServerInfo acquire() {
+        this.lock.lock();
+        if(this.references == 0){
+            throw new RuntimeException("Socket got non-initial acquire with references == 0");
+        }
+        this.references++;
+        Stats.getInstance().setSocketRefs(1);
+        ServerInfo info = this.serverInfo;
+        this.lock.unlock();
+        return info;
+    }
+
     public void release(){
         this.lock.lock();
         if(this.references == 0){

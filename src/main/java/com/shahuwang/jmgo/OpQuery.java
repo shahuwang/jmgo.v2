@@ -119,6 +119,21 @@ public class OpQuery implements IOperator{
         return this;
     }
 
+    public BsonDocument getServerTags() {
+        return serverTags;
+    }
+
+    public OpQuery clone(){
+        OpQuery op = new OpQuery();
+        op.setCollection(this.cllection)
+                .setQuery(this.query).setSkip(this.skip)
+                .setLimit(this.limit).setSelector(this.selector)
+                .setFlags(this.flags).setReplyFuncs(this.replyFunc)
+                .setMode(this.mode).setOptions(this.options)
+                .setHasOptions(this.hasOptions).setServerTags(this.serverTags);
+        return op;
+    }
+
     public OpCode getOpCode(){
         return OpCode.OP_QUERY;
     }
