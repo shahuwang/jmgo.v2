@@ -92,11 +92,16 @@ public class MongoCluster {
                 continue;
             }catch (SocketAbendException e){
                 if(!slaveOk){
-
+                    //TODO
                 }
             }
+            //TODO
             //server.acquireSocket();
         }
+    }
+
+    private MasterAck isMaster(MongoServer server){
+        //TODo
     }
 
     private void removeServer(MongoServer server){
