@@ -3,6 +3,7 @@ package com.shahuwang.jmgo;
 import com.shahuwang.jmgo.exceptions.NoReachableServerException;
 import com.shahuwang.jmgo.exceptions.SessionClosedException;
 import com.shahuwang.jmgo.exceptions.SlaveSocketReservedException;
+import com.shahuwang.jmgo.exceptions.SocketAbendException;
 import org.apache.logging.log4j.Logger;
 import org.bson.BsonDocument;
 
@@ -24,6 +25,7 @@ public class MongoSession {
     private int poolLimit;
     private boolean slaveOk;
     private OpQuery safeOp;
+    private String defaultdb;
     private Logger logger = Log.getLogger(MongoSession.class.getName());
     public MongoSession(Mode consistency, MongoCluster cluster, Duration timeout){
         cluster.acquire();
@@ -36,6 +38,16 @@ public class MongoSession {
         this.queryConfig.setPrefetch(0.25f);
     }
 
+    public BsonDocument run(BsonDocument cmd)throws SessionClosedException, NoReachableServerException{
+        return this.DB("admin").run(cmd);
+    }
+
+    public Database DB(String name){
+        if(name == ""){
+            name = this.defaultdb;
+        }
+        return new Database(this, name);
+    }
     public void setMode(Mode consistency, boolean refresh){
         this.lock.writeLock().lock();
         this.consistency = consistency;
@@ -55,6 +67,16 @@ public class MongoSession {
         this.safeOp = null;
         this.ensureSafe(safe);
         this.lock.writeLock().unlock();
+    }
+
+    private void prepareQuery(OpQuery op){
+        this.lock.readLock().lock();
+        op.setMode(this.consistency);
+        if(this.slaveOk){
+            int flag = (op.getFlags() | OpQueryFlag.flagSlaveOk);
+            op.setFlags(flag);
+        }
+        this.lock.readLock().unlock();
     }
 
     private void ensureSafe(Safe safe){
@@ -161,7 +183,7 @@ public class MongoSession {
         //TODO
     }
 
-    private void setSocket(MongoSocket socket){
+    protected void setSocket(MongoSocket socket){
         ServerInfo info = socket.acquire();
         if(info.isMaster()){
             if(this.masterSocket != null){

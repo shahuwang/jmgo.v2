@@ -107,9 +107,12 @@ public class MongoCluster {
         }
     }
 
-    private MasterAck isMaster(MongoServer server){
+    private MasterAck isMaster(MongoSocket socket){
         //TODo
-        MongoSession session = new MongoSession();
+        MongoSession session = new MongoSession(Mode.MONOTONIC, this, Duration.ofSeconds(10));
+        session.setSocket(socket);
+        //session.Run("ismaster");
+        return null;
     }
 
     private void removeServer(MongoServer server){
