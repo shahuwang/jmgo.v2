@@ -4,7 +4,7 @@ package com.shahuwang.jmgo;
  * Created by rickey on 2017/4/5.
  */
 public class QueryConfig {
-    private long prefetch;
+    private float prefetch;
     private int limit;
     private OpQuery op;
 
@@ -12,7 +12,7 @@ public class QueryConfig {
         return op;
     }
 
-    public long getPrefetch() {
+    public float getPrefetch() {
         return prefetch;
     }
 
@@ -20,7 +20,7 @@ public class QueryConfig {
         return limit;
     }
 
-    public void setPrefetch(long prefetch) {
+    public void setPrefetch(float prefetch) {
         this.prefetch = prefetch;
     }
 

@@ -2,8 +2,11 @@ package com.shahuwang.jmgo;
 
 import com.shahuwang.jmgo.exceptions.NoReachableServerException;
 import com.shahuwang.jmgo.exceptions.SessionClosedException;
+import com.shahuwang.jmgo.exceptions.SlaveSocketReservedException;
+import org.apache.logging.log4j.Logger;
 import org.bson.BsonDocument;
 
+import java.time.Duration;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -14,9 +17,69 @@ public class MongoSession {
     private QueryConfig queryConfig;
     private MongoSocket slaveSocket;
     private MongoSocket masterSocket;
-    private boolean slaveOk;
     private Mode consistency;
     private MongoCluster cluster_;
+    private Duration syncTimeout;
+    private Duration sockTimeout;
+    private int poolLimit;
+    private boolean slaveOk;
+    private OpQuery safeOp;
+    private Logger logger = Log.getLogger(MongoSession.class.getName());
+    public MongoSession(Mode consistency, MongoCluster cluster, Duration timeout){
+        cluster.acquire();
+        this.cluster_ = cluster;
+        this.sockTimeout = timeout;
+        this.syncTimeout = timeout;
+        this.poolLimit = 4096;
+        this.setMode(consistency, true);
+        this.setSafe(new Safe());
+        this.queryConfig.setPrefetch(0.25f);
+    }
+
+    public void setMode(Mode consistency, boolean refresh){
+        this.lock.writeLock().lock();
+        this.consistency = consistency;
+        if(refresh){
+            this.slaveOk = this.consistency != Mode.STRONG;
+            this.unsetSocket();
+        }else if(this.consistency == Mode.STRONG){
+            this.slaveOk = false;
+        }else if(this.masterSocket == null){
+            this.slaveOk = true;
+        }
+        this.lock.writeLock().unlock();
+    }
+
+    public void setSafe(Safe safe){
+        this.lock.writeLock().lock();
+        this.safeOp = null;
+        this.ensureSafe(safe);
+        this.lock.writeLock().unlock();
+    }
+
+    private void ensureSafe(Safe safe){
+        if(safe == null){
+            return;
+        }
+        Object w = null;
+        if(safe.getwMode() != ""){
+            w = safe.getwMode();
+        }else if(safe.getW() > 0){
+            w = safe.getW();
+        }
+        //TODO
+    }
+
+    private void unsetSocket(){
+        if(this.masterSocket != null){
+            this.masterSocket.release();
+        }
+        if(this.slaveSocket != null){
+            this.slaveSocket.release();
+        }
+        this.masterSocket = null;
+        this.slaveSocket = null;
+    }
 
     protected MongoSocket acquireSocket(boolean slaveOk)throws SessionClosedException, NoReachableServerException {
         this.lock.readLock().lock();
@@ -62,10 +125,10 @@ public class MongoSession {
         try {
             socket = this.cluster().acquireSocket(
                     this.consistency, this.slaveOk && this.slaveOk,
-                    this.syncTimeout, this.sockTimeout, tags.toArray(new BsonElement[tags.size()]), this.poolLimit);
-        }catch (SessionClosedException e){
-            this.lock.writeLock().unlock();
-            throw new SessionClosedException();
+                    this.syncTimeout, this.sockTimeout, tags, this.poolLimit);
+//        }catch (SessionClosedException e){
+//            this.lock.writeLock().unlock();
+//            throw new SessionClosedException();
         }catch (NoReachableServerException e){
             this.lock.writeLock().unlock();
             throw new NoReachableServerException();
@@ -79,19 +142,38 @@ public class MongoSession {
         }
 
         if(this.consistency != Mode.EVENTULA || this.slaveSocket != null){
-            try {
+//            try {
                 this.setSocket(socket);
-            }catch (SlaveSocketReservedException  e){
-                logger.catching(e);
-            }catch (MasterSocketReservedException e){
-                logger.catching(e);
-            }
+//            }catch (SlaveSocketReservedException e){
+//                logger.catching(e);
+//            }catch (MasterSocketReservedException e){
+//                logger.catching(e);
+//            }
         }
         if (!slaveOk && this.consistency == Mode.MONOTONIC){
             this.slaveOk = false;
         }
         this.lock.writeLock().unlock();
         return socket;
+    }
+
+    private void socketLogin(MongoSocket socket){
+        //TODO
+    }
+
+    private void setSocket(MongoSocket socket){
+        ServerInfo info = socket.acquire();
+        if(info.isMaster()){
+            if(this.masterSocket != null){
+                throw new RuntimeException("setSocket(master) with existing master socket reserved");
+            }
+            this.masterSocket = socket;
+        }else{
+            if(this.slaveSocket != null){
+                throw new RuntimeException("setSocket(slave) with existing slave socket reserved");
+            }
+            this.slaveSocket= socket;
+        }
     }
 
     protected MongoCluster cluster() {

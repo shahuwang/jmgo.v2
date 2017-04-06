@@ -23,6 +23,13 @@ public class MongoCluster {
     private boolean failFast;
     private SyncChan<Boolean> sync;
     private Condition serverSynced;
+    private int reference;
+
+    public void acquire(){
+        this.rwlock.readLock().lock();
+        this.reference++;
+        this.rwlock.readLock().unlock();
+    }
 
     public MongoSocket acquireSocket(Mode mode, boolean slaveOk, Duration syncTimeout
             , Duration socketTimeout, BsonDocument serverTags, int poolLimit) throws NoReachableServerException {
@@ -102,6 +109,7 @@ public class MongoCluster {
 
     private MasterAck isMaster(MongoServer server){
         //TODo
+        MongoSession session = new MongoSession();
     }
 
     private void removeServer(MongoServer server){
