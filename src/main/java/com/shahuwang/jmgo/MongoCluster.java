@@ -24,6 +24,28 @@ public class MongoCluster {
     private SyncChan<Boolean> sync;
     private Condition serverSynced;
     private int reference;
+    private ServerAddr[] userSeeds;
+    private ServerAddr[] dynaSeeds;
+    private boolean direct;
+    private IDialer dialer;
+    private String setName;
+
+    public MongoCluster(ServerAddr[] userSeeds, boolean direct, boolean failFast, IDialer dialer, String setName){
+        this.userSeeds = userSeeds;
+        this.reference = 1;
+        this.direct = direct;
+        this.failFast = failFast;
+        this.dialer = dialer;
+        this.setName = setName;
+        this.sync = new SyncChan<>();
+        this.serverSynced = this.rwlock.readLock().newCondition();
+        Stats.getInstance().setCluster(1);
+        Runnable task = () -> {
+
+        };
+        Thread thread = new Thread(task);
+        thread.start();
+    }
 
     public void acquire(){
         this.rwlock.readLock().lock();

@@ -1,14 +1,12 @@
 package com.shahuwang.jmgo;
 
-import com.shahuwang.jmgo.exceptions.NoReachableServerException;
-import com.shahuwang.jmgo.exceptions.SessionClosedException;
-import com.shahuwang.jmgo.exceptions.SlaveSocketReservedException;
-import com.shahuwang.jmgo.exceptions.SocketAbendException;
+import com.shahuwang.jmgo.exceptions.*;
 import org.apache.logging.log4j.Logger;
 import org.bson.BsonDocument;
 
 import java.time.Duration;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.jar.JarException;
 
 /**
  * Created by rickey on 2017/4/5.
@@ -38,7 +36,7 @@ public class MongoSession {
         this.queryConfig.setPrefetch(0.25f);
     }
 
-    public BsonDocument run(BsonDocument cmd)throws SessionClosedException, NoReachableServerException{
+    public BsonDocument run(BsonDocument cmd)throws SessionClosedException, NoReachableServerException, JmgoException, NotFoundError{
         return this.DB("admin").run(cmd);
     }
 
@@ -69,7 +67,7 @@ public class MongoSession {
         this.lock.writeLock().unlock();
     }
 
-    private void prepareQuery(OpQuery op){
+    protected void prepareQuery(OpQuery op){
         this.lock.readLock().lock();
         op.setMode(this.consistency);
         if(this.slaveOk){
