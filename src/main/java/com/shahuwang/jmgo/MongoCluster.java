@@ -165,7 +165,12 @@ public class MongoCluster {
             this.rwlock.readLock().unlock();
             this.syncServersIteration(direct);
             this.sync.poll();
-            this.release();
+            try {
+
+                this.release();
+            }catch (ReferenceZeroException e){
+                logger.catching(e);
+            }
             if(!this.failFast){
                 try {
                     Thread.sleep(syncShortDelay.toMillis());
@@ -180,7 +185,7 @@ public class MongoCluster {
             }
             this.syncCount++;
             this.serverSynced.signalAll();
-            boolean restart = !direct && this.masters.Empty() || this.servers.Empty();
+            boolean restart = !direct && this.masters.empty() || this.servers.empty();
             this.rwlock.readLock().unlock();
             if(restart){
                 try {
@@ -198,11 +203,29 @@ public class MongoCluster {
         Lock m = new ReentrantLock();
     }
 
+    public void release() throws ReferenceZeroException{
+        this.rwlock.writeLock().lock();
+        if(this.reference == 0){
+            this.rwlock.writeLock().unlock();
+            throw new ReferenceZeroException("cluster release with references == 0");
+        }
+        this.reference--;
+        logger.info("Cluster {} released (refs={})", this, this.reference);
+        if(this.reference == 0) {
+            for(MongoServer server: this.servers.getSlice()){
+                server.close();
+            }
+            this.syncServers();
+            Stats.getInstance().setCluster(-1);
+        }
+        this.rwlock.writeLock().unlock();
+    }
+
     protected TopologyInfo syncServer(MongoServer server) throws SyncServerException{
         Duration syncTimeout = null;
         if (BuildConfig.getInstance().getRacedetector()){
             synchronized (GlobalMutex.class){
-                syncTimeout = Cluster.syncSocketTimeout;
+                syncTimeout = this.syncSocketTimeout;
             }
         } else {
             syncTimeout = Cluster.syncSocketTimeout;

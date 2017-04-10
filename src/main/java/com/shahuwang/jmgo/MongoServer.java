@@ -178,6 +178,13 @@ public class MongoServer {
         return true;
     }
 
+    public void setInfo(ServerInfo info){
+        this.rwlock.writeLock().lock();
+        this.info = info;
+        this.rwlock.writeLock().unlock();
+
+    }
+
     public void close(){
         this.rwlock.writeLock().lock();
         this.closed = true;
