@@ -13,7 +13,7 @@ import java.util.jar.JarException;
  */
 public class MongoSession {
     private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-    private QueryConfig queryConfig;
+    private QueryConfig queryConfig = new QueryConfig();
     private MongoSocket slaveSocket;
     private MongoSocket masterSocket;
     private Mode consistency;
@@ -37,6 +37,10 @@ public class MongoSession {
     }
 
     public BsonDocument run(BsonDocument cmd)throws SessionClosedException, NoReachableServerException, JmgoException, NotFoundError{
+        return this.DB("admin").run(cmd);
+    }
+
+    public BsonDocument run(String cmd)throws JmgoException, NotFoundError{
         return this.DB("admin").run(cmd);
     }
 

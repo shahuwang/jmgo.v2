@@ -4,6 +4,7 @@ import org.bson.BsonDocument;
 import org.bson.BsonElement;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Vector;
@@ -12,7 +13,7 @@ import java.util.Vector;
  * Created by rickey on 2017/3/1.
  */
 public class Servers {
-    private List<MongoServer> slice;
+    private List<MongoServer> slice = new ArrayList<>();
 
     public MongoServer search(ServerAddr addr){
         for(MongoServer server: this.slice){

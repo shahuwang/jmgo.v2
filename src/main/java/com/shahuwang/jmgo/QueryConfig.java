@@ -6,7 +6,7 @@ package com.shahuwang.jmgo;
 public class QueryConfig {
     private float prefetch;
     private int limit;
-    private OpQuery op;
+    private OpQuery op = new OpQuery();
 
     public OpQuery getOp() {
         return op;
