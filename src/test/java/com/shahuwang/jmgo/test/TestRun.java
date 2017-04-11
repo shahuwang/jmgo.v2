@@ -1,9 +1,6 @@
 package com.shahuwang.jmgo.test;
 
-import com.shahuwang.jmgo.IDialer;
-import com.shahuwang.jmgo.Mode;
-import com.shahuwang.jmgo.MongoCluster;
-import com.shahuwang.jmgo.MongoSession;
+import com.shahuwang.jmgo.*;
 import com.shahuwang.jmgo.exceptions.JmgoException;
 import com.shahuwang.jmgo.exceptions.NotFoundError;
 import junit.framework.TestCase;
@@ -16,7 +13,9 @@ import java.time.Duration;
  */
 public class TestRun extends TestCase{
     public void testRun(){
-        MongoCluster cluster = new MongoCluster(null, true, true, new Dialer(), "");
+        ServerAddr addr = new ServerAddr("localhost", 27017);
+        ServerAddr[] unusedSedds = {addr};
+        MongoCluster cluster = new MongoCluster(unusedSedds, true, true, new Dialer(), "");
         MongoSession session = new MongoSession(Mode.PRIMARY, cluster, Duration.ofSeconds(10));
         try {
             BsonDocument doc = session.run("ping");

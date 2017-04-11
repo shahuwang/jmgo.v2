@@ -5,13 +5,12 @@ import org.apache.logging.log4j.Logger;
 import org.bson.BsonDocument;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.Phaser;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 
 /**
  * Created by rickey on 2017/4/5.
@@ -33,6 +32,7 @@ public class MongoCluster {
     private String setName;
     private Duration syncShortDelay = Duration.ofMillis(500);
     private Duration syncServersDelay = Duration.ofSeconds(30);
+    protected final static Duration syncSocketTimeout = Duration.ofSeconds(5);
 
     public MongoCluster(ServerAddr[] userSeeds, boolean direct, boolean failFast, IDialer dialer, String setName){
         this.userSeeds = userSeeds;
@@ -45,7 +45,7 @@ public class MongoCluster {
         this.serverSynced = this.rwlock.writeLock().newCondition();
         Stats.getInstance().setCluster(1);
         Runnable task = () -> {
-
+            this.syncServersLoop();
         };
         Thread thread = new Thread(task);
         thread.start();
@@ -133,11 +133,12 @@ public class MongoCluster {
         }
     }
 
-    private MasterAck isMaster(MongoSocket socket){
+    private MasterAck isMaster(MongoSocket socket, MasterAck result)throws JmgoException, NotFoundError{
         //TODo
         MongoSession session = new MongoSession(Mode.MONOTONIC, this, Duration.ofSeconds(10));
         session.setSocket(socket);
-        //session.Run("ismaster");
+        session.run("ismaster");
+        session.close();
         return null;
     }
 
@@ -200,7 +201,47 @@ public class MongoCluster {
     }
 
     private void syncServersIteration(boolean direct){
-        Lock m = new ReentrantLock();
+        logger.info("SYNC starting full topology synchronization");
+        ServerAddr[] knownAddr = this.getKnowAddrs();
+        Phaser phaser = new Phaser();
+        for(ServerAddr addr: knownAddr){
+            Thread thread = new Thread(new SpawnSync(this, addr, false, direct, phaser));
+            thread.start();
+        }
+        try {
+            phaser.wait();
+        }catch (InterruptedException e){
+            logger.catching(e);
+        }
+        if (SpawnSync.syncKind == SyncKind.COMPLETE_SYNC) {
+            logger.info("SYNC synchronization was complte (got data from primary)");
+            for(PendingAdd pending: SpawnSync.notYetAdd.values()){
+                this.removeServer(pending.server);
+            }
+        }else{
+            logger.info("SYNC Synchronization was partial (cannot talk to primary).");
+            for(PendingAdd pending: SpawnSync.notYetAdd.values()){
+                try {
+                    this.addServer(pending.server, pending.info, SyncKind.PARTIAL_SYNC);
+                }catch (JmgoException e){
+                    logger.catching(e);
+                }
+            }
+        }
+        this.rwlock.writeLock().lock();
+        int masterlen = this.masters.len();
+        logger.info("SYNC synchronization completed: {} master(s) and {} slave(s) alive", masterlen, this.servers.len() - masterlen);
+        if(SpawnSync.syncKind == SyncKind.COMPLETE_SYNC) {
+            ServerAddr[] dynaSeeds = new ServerAddr[this.servers.len()];
+            int i = 0;
+            for(MongoServer server: this.servers.getSlice()){
+                dynaSeeds[i] = server.getAddr();
+                i++;
+            }
+            this.dynaSeeds = dynaSeeds;
+            logger.debug("SYNC new dynamic seeds: {}", dynaSeeds);
+        }
+        this.rwlock.writeLock().unlock();
     }
 
     public void release() throws ReferenceZeroException{
@@ -228,7 +269,7 @@ public class MongoCluster {
                 syncTimeout = this.syncSocketTimeout;
             }
         } else {
-            syncTimeout = Cluster.syncSocketTimeout;
+            syncTimeout = this.syncSocketTimeout;
         }
 
         ServerAddr addr = server.getAddr();
@@ -256,7 +297,7 @@ public class MongoCluster {
             try {
                 this.isMaster(socket, result);
                 socket.release();
-            }catch (JmgoException e){
+            }catch (JmgoException | NotFoundError e){
                 socket.release();
                 String errmsg = String.format("SYNC Command 'ismaster' to %s failed: %s", addr.getTcpaddr().toString(), e.getMessage());
                 err = new SyncServerException(errmsg);
@@ -344,6 +385,41 @@ public class MongoCluster {
         logger.info("SYNC Broadcasting availability of server {}", server.getAddr().getTcpaddr().toString());
         this.serverSynced.signalAll();
         this.rwlock.writeLock().unlock();
+    }
+
+    private ServerAddr[] getKnowAddrs(){
+        this.rwlock.readLock().lock();
+        int max = 0;
+        if(this.userSeeds != null){
+            max = max + this.userSeeds.length;
+        }
+        if(this.dynaSeeds != null){
+            max = max + this.dynaSeeds.length;
+        }
+        max = max + this.servers.len();
+        Map<ServerAddr, Boolean> seen = new HashMap<>(max);
+        Vector<ServerAddr> known = new Vector<>(max);
+        Consumer<ServerAddr> add = (ServerAddr addr) -> {
+            if(!seen.containsKey(addr)){
+                seen.put(addr, true);
+                known.add(addr);
+            }
+        };
+        if(this.userSeeds != null){
+            for(ServerAddr addr: this.userSeeds){
+                add.accept(addr);
+            }
+        }
+        if(this.dynaSeeds != null){
+            for(ServerAddr addr: this.dynaSeeds){
+                add.accept(addr);
+            }
+        }
+        for(MongoServer serv: this.servers.getSlice()){
+            add.accept(serv.getAddr());
+        }
+        this.rwlock.readLock().unlock();
+        return known.toArray(new ServerAddr[known.size()]);
     }
 
     private void syncServers() {

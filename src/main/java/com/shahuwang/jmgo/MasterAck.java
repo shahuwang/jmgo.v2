@@ -1,6 +1,6 @@
 package com.shahuwang.jmgo;
 
-import org.bson.BsonElement;
+import org.bson.BsonDocument;
 
 /**
  * Created by rickey on 2017/3/2.
@@ -11,7 +11,7 @@ public class MasterAck {
     private ServerAddr primary;
     private ServerAddr[] hosts;
     private ServerAddr[] passives;
-    private BsonElement[]Tags;
+    private BsonDocument Tags;
     private String setName;
     private String msg;
     private int maxWireVersion;
@@ -44,7 +44,7 @@ public class MasterAck {
         return maxWireVersion;
     }
 
-    public BsonElement[] getTags() {
+    public BsonDocument getTags() {
         return Tags;
     }
 

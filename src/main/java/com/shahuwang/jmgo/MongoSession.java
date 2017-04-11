@@ -207,6 +207,21 @@ public class MongoSession {
         return this.cluster_;
     }
 
+    public void close(){
+        this.lock.writeLock().lock();
+        if(this.cluster_ != null){
+            this.unsetSocket();
+            try {
+                this.cluster_.release();
+            }catch (ReferenceZeroException e){
+                logger.catching(e);
+            }
+            this.cluster_ = null;
+        }
+        this.lock.writeLock().unlock();
+    }
+
+
     public ReentrantReadWriteLock getLock() {
         return lock;
     }
