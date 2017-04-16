@@ -23,6 +23,15 @@ public class TestRun extends TestCase{
         }catch (JmgoException | NotFoundError e){
             System.out.println("=====================");
         }
+        byte[] b = {-87, 0, 0, 0};
+        System.out.println(getInt(b, 0));
+    }
+    private int getInt(byte[] b, int pos){
+        int ret = b[pos] & 0xff;
+        for(int i=1; i<4; i++){
+            ret = ret | ((b[pos+i]<<(8 * i))&0xff);
+        }
+        return ret;
     }
     class Dialer implements IDialer {};
 }

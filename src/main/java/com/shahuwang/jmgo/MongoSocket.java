@@ -489,17 +489,17 @@ public class MongoSocket {
     }
 
     private int getInt(byte[] b, int pos){
-        int ret = (int)b[pos];
+        int ret = b[pos] & 0xff;
         for(int i=1; i<4; i++){
-            ret = ret | ((int)b[pos+i]<<8);
+            ret = ret | ((b[pos+i]<<(8 * i))&0xff);
         }
         return ret;
     }
 
     private long getLong(byte[] b, int pos){
-        long ret = (long)b[pos];
+        long ret = b[pos] &0xff;
         for(int i=1; i<8; i++){
-            ret = ret | ((long)b[pos+i]<<8);
+            ret = ret | ((b[pos+i]<<(8*i)) & 0xff);
         }
         return ret;
     }

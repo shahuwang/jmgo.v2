@@ -63,6 +63,8 @@ public class Database {
            throw new NotFoundError();
        }
        ByteBuf buf = new ByteBufNIO(ByteBuffer.allocate(data.length));
+       buf = buf.put(data, 0, data.length);
+       buf.position(0);
        BsonInput binput = new ByteBufferBsonInput(buf);
        BsonBinaryReader reader = new BsonBinaryReader(binput);
        return DocumentCodec.decode(reader, DecoderContext.builder().build());
